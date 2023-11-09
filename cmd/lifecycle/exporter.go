@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/buildpacks/lifecycle"
+	"github.com/buildpacks/lifecycle/auth"
 	"github.com/buildpacks/lifecycle/buildpack"
 	"github.com/buildpacks/lifecycle/cache"
 	"github.com/buildpacks/lifecycle/cmd"
@@ -29,6 +31,7 @@ import (
 	"github.com/buildpacks/lifecycle/layers"
 	"github.com/buildpacks/lifecycle/platform"
 	"github.com/buildpacks/lifecycle/platform/files"
+	"github.com/buildpacks/lifecycle/priv"
 )
 
 type exportCmd struct {
@@ -101,8 +104,24 @@ func (e *exportCmd) Args(nargs int, args []string) error {
 }
 
 func (e *exportCmd) Privileges() error {
-	// Temporarily skip Privileges() call when used inside ACA builder
-	cmd.DefaultLogger.Debugf("Skipping Privileges() call inside exporter.")
+	var err error
+	e.keychain, err = auth.DefaultKeychain(e.registryImages()...)
+	if err != nil {
+		return cmd.FailErr(err, "resolve keychain")
+	}
+	if e.UseDaemon {
+		var err error
+		e.docker, err = priv.DockerClient()
+		if err != nil {
+			return cmd.FailErr(err, "initialize docker client")
+		}
+	}
+	if err = priv.EnsureOwner(e.UID, e.GID, e.CacheDir, e.LaunchCacheDir); err != nil {
+		return cmd.FailErr(err, "chown volumes")
+	}
+	if err = priv.RunAs(e.UID, e.GID); err != nil {
+		return cmd.FailErr(err, fmt.Sprintf("exec as user %d:%d", e.UID, e.GID))
+	}
 	return nil
 }
 

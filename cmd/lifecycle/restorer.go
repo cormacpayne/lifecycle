@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 
 	"github.com/buildpacks/lifecycle"
+	"github.com/buildpacks/lifecycle/auth"
 	"github.com/buildpacks/lifecycle/buildpack"
 	"github.com/buildpacks/lifecycle/cmd"
 	"github.com/buildpacks/lifecycle/cmd/lifecycle/cli"
@@ -22,6 +23,7 @@ import (
 	"github.com/buildpacks/lifecycle/internal/layer"
 	"github.com/buildpacks/lifecycle/platform"
 	"github.com/buildpacks/lifecycle/platform/files"
+	"github.com/buildpacks/lifecycle/priv"
 )
 
 const kanikoDir = "/kaniko"
@@ -68,8 +70,24 @@ func (r *restoreCmd) Args(nargs int, _ []string) error {
 }
 
 func (r *restoreCmd) Privileges() error {
-	// Temporarily skip Privileges() call when used inside ACA builder
-	cmd.DefaultLogger.Debugf("Skipping Privileges() call inside restorer.")
+	var err error
+	r.keychain, err = auth.DefaultKeychain(r.RegistryImages()...)
+	if err != nil {
+		return cmd.FailErr(err, "resolve keychain")
+	}
+	if r.UseDaemon {
+		var err error
+		r.docker, err = priv.DockerClient()
+		if err != nil {
+			return cmd.FailErr(err, "initialize docker client")
+		}
+	}
+	if err = priv.EnsureOwner(r.UID, r.GID, r.LayersDir, r.CacheDir, r.KanikoDir); err != nil {
+		return cmd.FailErr(err, "chown volumes")
+	}
+	if err = priv.RunAs(r.UID, r.GID); err != nil {
+		return cmd.FailErr(err, fmt.Sprintf("exec as user %d:%d", r.UID, r.GID))
+	}
 	return nil
 }
 

@@ -78,7 +78,9 @@ func (f *AnalyzerFactory) NewAnalyzer(
 	}
 
 	if f.platformAPI.AtLeast("0.7") {
-		// Temporarily skip ensuring registry access for the analyzer
+		if err := f.ensureRegistryAccess(additionalTags, cacheImageRef, outputImageRef, runImageRef, previousImageRef); err != nil {
+			return nil, err
+		}
 	} else {
 		if err := f.setBuildpacks(analyzer, legacyGroup, legacyGroupPath, logger); err != nil {
 			return nil, err
@@ -104,6 +106,30 @@ func (f *AnalyzerFactory) NewAnalyzer(
 		return nil, err
 	}
 	return analyzer, nil
+}
+
+func (f *AnalyzerFactory) ensureRegistryAccess(
+	additionalTags []string,
+	cacheImageRef string,
+	outputImageRef string,
+	runImageRef string,
+	previousImageRef string,
+) error {
+	var readImages, writeImages []string
+	writeImages = append(writeImages, cacheImageRef)
+	if f.imageHandler.Kind() == image.RemoteKind {
+		readImages = append(readImages, previousImageRef, runImageRef)
+		writeImages = append(writeImages, outputImageRef)
+		writeImages = append(writeImages, additionalTags...)
+	}
+
+	if err := f.registryHandler.EnsureReadAccess(readImages...); err != nil {
+		return errors.Wrap(err, "validating registry read access")
+	}
+	if err := f.registryHandler.EnsureWriteAccess(writeImages...); err != nil {
+		return errors.Wrap(err, "validating registry write access")
+	}
+	return nil
 }
 
 func (f *AnalyzerFactory) setBuildpacks(analyzer *Analyzer, group buildpack.Group, path string, logger log.Logger) error {

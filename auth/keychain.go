@@ -4,23 +4,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
 
-	ecr "github.com/awslabs/amazon-ecr-credential-helper/ecr-login"
-	"github.com/chrismellard/docker-credential-acr-env/pkg/credhelper"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/pkg/errors"
 )
 
 const EnvRegistryAuth = "CNB_REGISTRY_AUTH"
-
-var (
-	amazonKeychain = authn.NewKeychainFromHelper(ecr.NewECRHelper(ecr.WithLogger(io.Discard)))
-	azureKeychain  = authn.NewKeychainFromHelper(credhelper.NewACRCredentialsHelper())
-)
 
 // DefaultKeychain returns a keychain containing authentication configuration for the given images
 // from the following sources, if they exist, in order of precedence:
@@ -36,8 +28,6 @@ func DefaultKeychain(images ...string) (authn.Keychain, error) {
 	return authn.NewMultiKeychain(
 		envKeychain,
 		NewResolvedKeychain(authn.DefaultKeychain, images...),
-		NewResolvedKeychain(amazonKeychain, images...),
-		NewResolvedKeychain(azureKeychain, images...),
 	), nil
 }
 

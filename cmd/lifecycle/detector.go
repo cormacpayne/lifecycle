@@ -10,6 +10,7 @@ import (
 	"github.com/buildpacks/lifecycle/internal/encoding"
 	"github.com/buildpacks/lifecycle/platform"
 	"github.com/buildpacks/lifecycle/platform/files"
+	"github.com/buildpacks/lifecycle/priv"
 )
 
 type detectCmd struct {
@@ -50,8 +51,10 @@ func (d *detectCmd) Args(nargs int, _ []string) error {
 }
 
 func (d *detectCmd) Privileges() error {
-	// Temporarily skip Privileges() call when used inside ACA builder
-	cmd.DefaultLogger.Debugf("Skipping Privileges() call inside detector.")
+	// detector should never be run with privileges
+	if priv.IsPrivileged() {
+		return cmd.FailErr(errors.New("refusing to run as root"), "detect")
+	}
 	return nil
 }
 
