@@ -2,23 +2,22 @@ package lifecycle
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"sort"
-
-	"github.com/pkg/errors"
-
 	"github.com/buildpacks/lifecycle/api"
 	"github.com/buildpacks/lifecycle/buildpack"
 	"github.com/buildpacks/lifecycle/env"
 	"github.com/buildpacks/lifecycle/internal/encoding"
 	"github.com/buildpacks/lifecycle/internal/fsutil"
+	"github.com/buildpacks/lifecycle/internal/telemetry"
 	"github.com/buildpacks/lifecycle/launch"
 	"github.com/buildpacks/lifecycle/layers"
 	"github.com/buildpacks/lifecycle/log"
 	"github.com/buildpacks/lifecycle/platform"
 	"github.com/buildpacks/lifecycle/platform/files"
+	"github.com/pkg/errors"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
 )
 
 type Platform interface {
@@ -34,18 +33,19 @@ type BuildEnv interface {
 }
 
 type Builder struct {
-	AppDir         string
-	BuildConfigDir string
-	LayersDir      string
-	PlatformDir    string
-	BuildExecutor  buildpack.BuildExecutor
-	DirStore       DirStore
-	Group          buildpack.Group
-	Logger         log.Logger
-	Out, Err       io.Writer
-	Plan           files.Plan
-	PlatformAPI    *api.Version
-	AnalyzeMD      files.Analyzed
+	AppDir          string
+	BuildConfigDir  string
+	LayersDir       string
+	PlatformDir     string
+	BuildExecutor   buildpack.BuildExecutor
+	DirStore        DirStore
+	Group           buildpack.Group
+	Logger          log.Logger
+	Out, Err        io.Writer
+	Plan            files.Plan
+	PlatformAPI     *api.Version
+	AnalyzeMD       files.Analyzed
+	TelemetrySender telemetry.TelemetrySender
 }
 
 func (b *Builder) Build() (*files.BuildMetadata, error) {
@@ -85,7 +85,9 @@ func (b *Builder) Build() (*files.BuildMetadata, error) {
 		b.Logger.Debug("Finding plan")
 		inputs.Plan = filteredPlan.Find(buildpack.KindBuildpack, bp.ID)
 
+		callback := b.TelemetrySender.Log(telemetry.EventBuildpackBuild, "id", bp.ID, "version", bp.Version)
 		br, err := b.BuildExecutor.Build(*bpTOML, inputs, b.Logger)
+		callback(err)
 		if err != nil {
 			return nil, err
 		}
