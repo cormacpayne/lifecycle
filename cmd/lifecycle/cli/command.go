@@ -1,12 +1,12 @@
 package cli
 
 import (
+	"github.com/buildpacks/lifecycle/cmd"
+	"github.com/buildpacks/lifecycle/internal/telemetry"
+	"github.com/buildpacks/lifecycle/platform"
 	"io"
 	"log"
 	"os"
-
-	"github.com/buildpacks/lifecycle/cmd"
-	"github.com/buildpacks/lifecycle/platform"
 )
 
 // Command defines the interface for running the lifecycle phases
@@ -78,5 +78,14 @@ func Run(c Command, withPhaseName string, asSubcommand bool) {
 		cmd.Exit(err)
 	}
 	cmd.DefaultLogger.Debugf("Executing command...")
-	cmd.Exit(c.Exec())
+	cmd.Exit(execWithTelemetry(c.Exec, withPhaseName))
+}
+
+func execWithTelemetry(f func() error, withPhaseName string) error {
+	telemetrySender := telemetry.NewAISender(telemetry.InstrumentationKey)
+	defer telemetrySender.Shutdown()
+	callback := telemetrySender.Log(telemetry.EventLifecyclePhase, "command", withPhaseName)
+	err := f()
+	callback(err)
+	return err
 }

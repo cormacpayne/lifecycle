@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"github.com/buildpacks/lifecycle/internal/telemetry"
 
 	"github.com/BurntSushi/toml"
 
@@ -74,20 +75,24 @@ func (b *buildCmd) Exec() error {
 }
 
 func (b *buildCmd) build(group buildpack.Group, plan files.Plan, analyzedMD files.Analyzed) error {
+	telemetrySender := telemetry.NewAISender(telemetry.InstrumentationKey)
+	defer telemetrySender.Shutdown()
+
 	builder := &lifecycle.Builder{
-		AppDir:         b.AppDir,
-		BuildConfigDir: b.BuildConfigDir,
-		LayersDir:      b.LayersDir,
-		PlatformDir:    b.PlatformDir,
-		BuildExecutor:  &buildpack.DefaultBuildExecutor{},
-		DirStore:       platform.NewDirStore(b.BuildpacksDir, ""),
-		Group:          group,
-		Logger:         cmd.DefaultLogger,
-		Out:            cmd.Stdout,
-		Err:            cmd.Stderr,
-		Plan:           plan,
-		PlatformAPI:    b.PlatformAPI,
-		AnalyzeMD:      analyzedMD,
+		AppDir:          b.AppDir,
+		BuildConfigDir:  b.BuildConfigDir,
+		LayersDir:       b.LayersDir,
+		PlatformDir:     b.PlatformDir,
+		BuildExecutor:   &buildpack.DefaultBuildExecutor{},
+		DirStore:        platform.NewDirStore(b.BuildpacksDir, ""),
+		Group:           group,
+		Logger:          cmd.DefaultLogger,
+		Out:             cmd.Stdout,
+		Err:             cmd.Stderr,
+		Plan:            plan,
+		PlatformAPI:     b.PlatformAPI,
+		AnalyzeMD:       analyzedMD,
+		TelemetrySender: telemetrySender,
 	}
 	md, err := builder.Build()
 	if err != nil {
